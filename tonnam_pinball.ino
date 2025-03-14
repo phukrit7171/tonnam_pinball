@@ -1,251 +1,79 @@
+/************************************************* ************************************************** ******
+* OPEN-SMART Red Serial MP3 Player Lesson 1: Play a song
+NOTE!!! First of all you should download the voice resources from our google drive:
+https://drive.google.com/drive/folders/0B6uNNXJ2z4CxaFVzZEZZVTR5Snc?usp=sharing
+
+
+Then unzip it and find the 01 and 02 folder and put them into your TF card (should not larger than 32GB). 
+
+* You can learn how to play a song with its index in the TF card.
+*
+* The following functions are available:
+*
+/--------basic operations---------------/
+mp3.play();
+mp3.pause();
+mp3.nextSong();
+mp3.previousSong();
+mp3.volumeUp();
+mp3.volumeDown();
+mp3.forward();    //fast forward
+mp3.rewind();     //fast rewind
+mp3.stopPlay();  
+mp3.stopInject(); //when you inject a song, this operation can stop it and come back to the song befor you inject
+mp3.singleCycle();//it can be set to cycle play the currently playing song 
+mp3.allCycle();   //to cycle play all the songs in the TF card
+/--------------------------------/
+
+mp3.playWithIndex(int8_t index);//play the song according to the physical index of song in the TF card
+
+mp3.injectWithIndex(int8_t index);//inject a song according to the physical index of song in the TF card when it is playing song.
+
+mp3.setVolume(int8_t vol);//vol is 0~0x1e, 30 adjustable level
+
+mp3.playWithFileName(int8_t directory, int8_t file);//play a song according to the folder name and prefix of its file name
+                                                            //foler name must be 01 02 03...09 10...99
+                                                            //prefix of file name must be 001...009 010...099
+
+mp3.playWithVolume(int8_t index, int8_t volume);//play the song according to the physical index of song in the TF card and the volume set
+
+mp3.cyclePlay(int16_t index);//single cycle play a song according to the physical index of song in the TF
+
+mp3.playCombine(int16_t folderAndIndex[], int8_t number);//play combination of the songs with its folder name and physical index
+      //folderAndIndex: high 8bit is folder name(01 02 ...09 10 11...99) , low 8bit is index of the song
+      //number is how many songs you want to play combination
+
+About SoftwareSerial library:
+The library has the following known limitations:
+If using multiple software serial ports, only one can receive data at a time.
+
+Not all pins on the Mega and Mega 2560 support change interrupts, so only the following can be used for RX: 
+10, 11, 12, 13, 14, 15, 50, 51, 52, 53, A8 (62), A9 (63), A10 (64), A11 (65), A12 (66), A13 (67), A14 (68), A15 (69).
+
+Not all pins on the Leonardo and Micro support change interrupts, so only the following can be used for RX: 
+8, 9, 10, 11, 14 (MISO), 15 (SCK), 16 (MOSI).
+On Arduino or Genuino 101 the current maximum RX speed is 57600bps.
+On Arduino or Genuino 101 RX doesn't work on Pin 13.
+
+Store: dx.com/440175
+https://open-smart.aliexpress.com/store/1199788
+
+************************************************** **************************************************/
 #include <SoftwareSerial.h>
-#include <DFRobotDFPlayerMini.h>
+#include "RedMP3.h"
 
-// Pin definitions
-const int SCORE_SENSOR = A0;      // Single analog pin for all scoring sensors (parallel circuit)
-const int SCORE_LEDS[] = {2, 3, 4, 5, 6}; // 5 LEDs for score indication
-const int SONG_SENSORS[] = {A1, A2, A3, A4}; // 4 sensors for different songs
-const int MOTOR_LIGHT_SENSOR = A5; // Sensor for motor and lights
-const int MARBLE_SENSOR = A6;     // Sensor for marble ejection
+#define MP3_RX 7  //RX of Serial MP3 module connect to D7 of Arduino
+#define MP3_TX 8  //TX to D8, note that D8 can not be used as RX on Mega2560, you should modify this if you donot use Arduino UNO
+MP3 mp3(MP3_RX, MP3_TX);
 
-// Output pins
-const int MOTOR_PIN = 7;          // Motor control pin
-const int LIGHTS_PIN = 8;         // Lights control pin (parallel connected)
-const int MARBLE_EJECTOR_PIN = 9; // Marble ejector control pin
-
-// MP3 Player setup
-SoftwareSerial mySoftwareSerial(10, 11); // RX, TX
-DFRobotDFPlayerMini myDFPlayer;
-
-// Thresholds and variables
-const int SENSOR_THRESHOLD = 500;     // Analog threshold for sensor detection
-const int DETECTION_DEBOUNCE = 1000;  // Debounce time in milliseconds
-int scoreCount = 0;                   // Counter for score detection
-unsigned long lastScoreTime = 0;      // Time of last score detection
-
-// Song file numbers (based on your 001.wav to 006.wav files)
-const int SCORE_SONG_1 = 1;           // 001.wav - First score threshold song
-const int SCORE_SONG_2 = 2;           // 002.wav - Second score threshold song
-const int UNIQUE_SONGS[] = {3, 4, 5, 6}; // Songs 003.wav to 006.wav for the 4 unique sensors
-
-// Timing variables for non-blocking operation
-unsigned long lastScoreSensorCheck = 0;
-unsigned long lastSongSensorCheck = 0;
-unsigned long lastMotorSensorCheck = 0;
-unsigned long lastMarbleSensorCheck = 0;
-
-// State variables
-bool motorActive = false;
-bool marbleEjectorActive = false;
-unsigned long motorStartTime = 0;
-unsigned long marbleStartTime = 0;
-const unsigned long MOTOR_ON_DURATION = 3000;    // 3 seconds
-const unsigned long MARBLE_ON_DURATION = 1000;   // 1 second
-
-// Previous sensor states for edge detection
-bool prevScoreSensorState = false;
-bool prevMotorSensorState = false;
-bool prevMarbleSensorState = false;
-bool prevSongSensorStates[4] = {false, false, false, false};
-
+int8_t index = 0x03;   //the first song in the TF card
+int8_t volume = 0x14;  // (20 adjustable level)
 void setup() {
-  // Initialize serial communications
-  Serial.begin(9600);
-  mySoftwareSerial.begin(9600);
-  
-  // Initialize DFPlayer
-  if (!myDFPlayer.begin(mySoftwareSerial)) {
-    Serial.println("Unable to begin DFPlayer Mini");
-    while(true);
-  }
-  
-  // Set volume (0-30)
-  myDFPlayer.volume(20);
-  
-  // Initialize LED pins as outputs
-  for (int i = 0; i < 5; i++) {
-    pinMode(SCORE_LEDS[i], OUTPUT);
-    digitalWrite(SCORE_LEDS[i], LOW);
-  }
-  
-  // Initialize output pins
-  pinMode(MOTOR_PIN, OUTPUT);
-  pinMode(LIGHTS_PIN, OUTPUT);
-  pinMode(MARBLE_EJECTOR_PIN, OUTPUT);
-  
-  // Turn off all outputs initially
-  digitalWrite(MOTOR_PIN, LOW);
-  digitalWrite(LIGHTS_PIN, LOW);
-  digitalWrite(MARBLE_EJECTOR_PIN, LOW);
-  
-  Serial.println("System initialized for Arduino UNO");
+  delay(500);  //Requires 500ms to wait for the MP3 module to initialize
+  mp3.playWithVolume(index, volume);
+  delay(50);  //you should wait for >=50ms between two commands
 }
 
 void loop() {
-  unsigned long currentMillis = millis();
-  
-  // Check score sensor (every 50ms)
-  if (currentMillis - lastScoreSensorCheck >= 50) {
-    checkScoreSensor();
-    lastScoreSensorCheck = currentMillis;
-  }
-  
-  // Check song sensors (every 50ms)
-  if (currentMillis - lastSongSensorCheck >= 50) {
-    checkSongSensors();
-    lastSongSensorCheck = currentMillis;
-  }
-  
-  // Check motor and lights sensor (every 50ms)
-  if (currentMillis - lastMotorSensorCheck >= 50) {
-    checkMotorLightsSensor();
-    lastMotorSensorCheck = currentMillis;
-  }
-  
-  // Check marble ejector sensor (every 50ms)
-  if (currentMillis - lastMarbleSensorCheck >= 50) {
-    checkMarbleEjectorSensor();
-    lastMarbleSensorCheck = currentMillis;
-  }
-  
-  // Handle timed events (motor and marble ejector)
-  handleTimedEvents(currentMillis);
 }
 
-void checkScoreSensor() {
-  // Read the parallel circuit of score sensors
-  bool currentState = analogRead(SCORE_SENSOR) > SENSOR_THRESHOLD;
-  
-  // Detect rising edge (sensor just activated)
-  if (currentState && !prevScoreSensorState) {
-    // Add debounce for multiple rapid detections
-    if (millis() - lastScoreTime > DETECTION_DEBOUNCE) {
-      // Increment score
-      scoreCount++;
-      lastScoreTime = millis();
-      
-      // Update LED indicators
-      updateScoreLEDs();
-      
-      // Debug print
-      Serial.print("Score increased: ");
-      Serial.println(scoreCount);
-      
-      // Check if we've reached 5 or 10 detections
-      if (scoreCount == 5) {
-        // Play song 001.wav at the first 5 detections
-        myDFPlayer.play(SCORE_SONG_1);
-        Serial.println("Playing score song 1 (001.wav)");
-      } else if (scoreCount == 10) {
-        // Play song 002.wav at the second 5 detections
-        myDFPlayer.play(SCORE_SONG_2);
-        Serial.println("Playing score song 2 (002.wav)");
-        
-        // Reset score count
-        scoreCount = 0;
-        
-        // Turn off all LEDs
-        for (int j = 0; j < 5; j++) {
-          digitalWrite(SCORE_LEDS[j], LOW);
-        }
-      }
-    }
-  }
-  
-  // Update previous state
-  prevScoreSensorState = currentState;
-}
-
-void updateScoreLEDs() {
-  // Calculate how many LEDs should be on based on score count
-  int ledsOn = min(scoreCount, 5);
-  
-  // Update LED states
-  for (int i = 0; i < 5; i++) {
-    if (i < ledsOn) {
-      digitalWrite(SCORE_LEDS[i], HIGH);
-    } else {
-      digitalWrite(SCORE_LEDS[i], LOW);
-    }
-  }
-}
-
-void checkSongSensors() {
-  // Check all four song sensors
-  for (int i = 0; i < 4; i++) {
-    bool currentState = analogRead(SONG_SENSORS[i]) > SENSOR_THRESHOLD;
-    
-    // Detect rising edge (sensor just activated)
-    if (currentState && !prevSongSensorStates[i]) {
-      // Play the corresponding unique song (003.wav to 006.wav)
-      int songNumber = UNIQUE_SONGS[i];
-      myDFPlayer.play(songNumber);
-      
-      // Debug print
-      Serial.print("Playing unique song ");
-      Serial.print(songNumber);
-      Serial.println(".wav");
-    }
-    
-    // Update previous state
-    prevSongSensorStates[i] = currentState;
-  }
-}
-
-void checkMotorLightsSensor() {
-  bool currentState = analogRead(MOTOR_LIGHT_SENSOR) > SENSOR_THRESHOLD;
-  
-  // Detect rising edge (sensor just activated)
-  if (currentState && !prevMotorSensorState && !motorActive) {
-    // Activate motor and lights
-    digitalWrite(MOTOR_PIN, HIGH);
-    digitalWrite(LIGHTS_PIN, HIGH);
-    motorActive = true;
-    motorStartTime = millis();
-    
-    // Debug print
-    Serial.println("Motor and lights activated");
-  }
-  
-  // Update previous state
-  prevMotorSensorState = currentState;
-}
-
-void checkMarbleEjectorSensor() {
-  bool currentState = analogRead(MARBLE_SENSOR) > SENSOR_THRESHOLD;
-  
-  // Detect rising edge (sensor just activated)
-  if (currentState && !prevMarbleSensorState && !marbleEjectorActive) {
-    // Activate marble ejector
-    digitalWrite(MARBLE_EJECTOR_PIN, HIGH);
-    marbleEjectorActive = true;
-    marbleStartTime = millis();
-    
-    // Debug print
-    Serial.println("Marble ejector activated");
-  }
-  
-  // Update previous state
-  prevMarbleSensorState = currentState;
-}
-
-void handleTimedEvents(unsigned long currentMillis) {
-  // Check if motor needs to be turned off
-  if (motorActive && (currentMillis - motorStartTime >= MOTOR_ON_DURATION)) {
-    digitalWrite(MOTOR_PIN, LOW);
-    digitalWrite(LIGHTS_PIN, LOW);
-    motorActive = false;
-    
-    // Debug print
-    Serial.println("Motor and lights deactivated");
-  }
-  
-  // Check if marble ejector needs to be turned off
-  if (marbleEjectorActive && (currentMillis - marbleStartTime >= MARBLE_ON_DURATION)) {
-    digitalWrite(MARBLE_EJECTOR_PIN, LOW);
-    marbleEjectorActive = false;
-    
-    // Debug print
-    Serial.println("Marble ejector deactivated");
-  }
-}
