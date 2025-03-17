@@ -31,7 +31,7 @@ const int SCORE_SONG[2] = { 0x01, 0x02 };                // score songs (001.wav
 const int UNIQUE_SONGS[4] = { 0x03, 0x04, 0x05, 0x06 };  // Songs 003.wav to 006.wav
 
 // Volume level (0-30)
-const int VOLUME_LEVEL = 0x14;  // Volume level 20
+const int VOLUME_LEVEL = 0x17;  // Volume level 22
 
 // Timing variables for non-blocking operation
 unsigned long lastScoreSensorCheck = 0;
@@ -79,11 +79,12 @@ void setup() {
   pinMode(MARBLE_SENSOR, INPUT);
 
   // Turn off all outputs initially
-  digitalWrite(MOTOR_PIN, LOW);
-  digitalWrite(LIGHTS_PIN, LOW);
-  digitalWrite(MARBLE_EJECTOR_PIN, LOW);
+  // For low-level trigger relays, HIGH means OFF
+  digitalWrite(MOTOR_PIN, HIGH);
+  digitalWrite(LIGHTS_PIN, LOW); // Lights are still using high-level trigger
+  digitalWrite(MARBLE_EJECTOR_PIN, HIGH);
 
-  Serial.println("System initialized for Arduino UNO");
+  Serial.println("System initialized for Arduino UNO with low-level trigger relays");
 }
 
 void loop() {
@@ -206,8 +207,8 @@ void checkMotorLightsSensor() {
   // Detect rising edge (sensor just activated)
   if (currentState && !prevMotorSensorState && !motorActive) {
     // Activate motor and lights
-    digitalWrite(MOTOR_PIN, HIGH);
-    digitalWrite(LIGHTS_PIN, HIGH);
+    digitalWrite(MOTOR_PIN, LOW);   // LOW turns on the low-level trigger relay
+    digitalWrite(LIGHTS_PIN, HIGH); // HIGH turns on the lights (assuming high-level trigger)
     motorActive = true;
     motorStartTime = millis();
 
@@ -226,7 +227,7 @@ void checkMarbleEjectorSensor() {
   // Detect rising edge (sensor just activated)
   if (currentState && !prevMarbleSensorState && !marbleEjectorActive) {
     // Activate marble ejector
-    digitalWrite(MARBLE_EJECTOR_PIN, HIGH);
+    digitalWrite(MARBLE_EJECTOR_PIN, LOW);  // LOW turns on the low-level trigger relay
     marbleEjectorActive = true;
     marbleStartTime = millis();
 
@@ -241,8 +242,8 @@ void checkMarbleEjectorSensor() {
 void handleTimedEvents(unsigned long currentMillis) {
   // Check if motor needs to be turned off
   if (motorActive && (currentMillis - motorStartTime >= MOTOR_ON_DURATION)) {
-    digitalWrite(MOTOR_PIN, LOW);
-    digitalWrite(LIGHTS_PIN, LOW);
+    digitalWrite(MOTOR_PIN, HIGH);   // HIGH turns off the low-level trigger relay
+    digitalWrite(LIGHTS_PIN, LOW);   // LOW turns off the lights (assuming high-level trigger)
     motorActive = false;
 
     // Debug print
@@ -251,7 +252,7 @@ void handleTimedEvents(unsigned long currentMillis) {
 
   // Check if marble ejector needs to be turned off
   if (marbleEjectorActive && (currentMillis - marbleStartTime >= MARBLE_ON_DURATION)) {
-    digitalWrite(MARBLE_EJECTOR_PIN, LOW);
+    digitalWrite(MARBLE_EJECTOR_PIN, HIGH);  // HIGH turns off the low-level trigger relay
     marbleEjectorActive = false;
 
     // Debug print
