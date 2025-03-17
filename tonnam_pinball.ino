@@ -19,10 +19,12 @@ const int MARBLE_EJECTOR_PIN = 9;  // Marble ejector control pin
 MP3 mp3(MP3_RX, MP3_TX);
 
 // Thresholds and variables
-const int SENSOR_THRESHOLD = 500;     // Analog threshold for sensor detection
-const int DETECTION_DEBOUNCE = 1000;  // Debounce time in milliseconds
-int scoreCount = 0;                   // Counter for score detection
-unsigned long lastScoreTime = 0;      // Time of last score detection
+const int SCORE_SENSOR_THRESHOLD = 300;    // Lower threshold for parallel score sensors
+const int SONG_SENSOR_THRESHOLD = 500;     // Threshold for individual song sensors
+const int MOTOR_SENSOR_THRESHOLD = 500;    // Threshold for motor sensor
+const int DETECTION_DEBOUNCE = 1000;       // Debounce time in milliseconds
+int scoreCount = 0;                        // Counter for score detection
+unsigned long lastScoreTime = 0;           // Time of last score detection
 
 // Song file numbers - RedMP3 requires folder and file structure
 // Assuming songs are in folder 01 with file names 001.wav, 002.wav, etc.
@@ -31,7 +33,7 @@ const int SCORE_SONG[2] = { 0x01, 0x02 };                // score songs (001.wav
 const int UNIQUE_SONGS[4] = { 0x03, 0x04, 0x05, 0x06 };  // Songs 003.wav to 006.wav
 
 // Volume level (0-30)
-const int VOLUME_LEVEL = 0x17;  // Volume level 23
+const int VOLUME_LEVEL = 0x14;  // Volume level 20
 
 // Timing variables for non-blocking operation
 unsigned long lastScoreSensorCheck = 0;
@@ -119,8 +121,17 @@ void loop() {
 }
 
 void checkScoreSensor() {
-  // Read the parallel circuit of score sensors
-  bool currentState = analogRead(SCORE_SENSOR) > SENSOR_THRESHOLD;
+  // Read the parallel circuit of score sensors - use specific threshold for parallel configuration
+  int sensorValue = analogRead(SCORE_SENSOR);
+  bool currentState = sensorValue > SCORE_SENSOR_THRESHOLD;
+  
+  // Debug sensor value periodically
+  static unsigned long lastDebugTime = 0;
+  if (millis() - lastDebugTime > 5000) {  // Every 5 seconds
+    Serial.print("Score sensor value: ");
+    Serial.println(sensorValue);
+    lastDebugTime = millis();
+  }
 
   // Detect rising edge (sensor just activated)
   if (currentState && !prevScoreSensorState) {
@@ -181,7 +192,8 @@ void updateScoreLEDs() {
 void checkSongSensors() {
   // Check all four song sensors
   for (int i = 0; i < 4; i++) {
-    bool currentState = analogRead(SONG_SENSORS[i]) > SENSOR_THRESHOLD;
+    int sensorValue = analogRead(SONG_SENSORS[i]);
+    bool currentState = sensorValue > SONG_SENSOR_THRESHOLD;
 
     // Detect rising edge (sensor just activated)
     if (currentState && !prevSongSensorStates[i]) {
@@ -202,7 +214,8 @@ void checkSongSensors() {
 }
 
 void checkMotorLightsSensor() {
-  bool currentState = analogRead(MOTOR_LIGHT_SENSOR) > SENSOR_THRESHOLD;
+  int sensorValue = analogRead(MOTOR_LIGHT_SENSOR);
+  bool currentState = sensorValue > MOTOR_SENSOR_THRESHOLD;
 
   // Detect rising edge (sensor just activated)
   if (currentState && !prevMotorSensorState && !motorActive) {
