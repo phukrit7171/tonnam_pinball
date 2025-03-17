@@ -40,6 +40,7 @@ unsigned long lastScoreSensorCheck = 0;
 unsigned long lastSongSensorCheck = 0;
 unsigned long lastMotorSensorCheck = 0;
 unsigned long lastMarbleSensorCheck = 0;
+unsigned long lastLedAnimationUpdate = 0;
 
 // State variables
 bool motorActive = false;
@@ -54,6 +55,14 @@ bool prevScoreSensorState = false;
 bool prevMotorSensorState = false;
 bool prevMarbleSensorState = false;
 bool prevSongSensorStates[4] = { false, false, false, false };
+
+// LED animation state variables
+bool ledAnimationActive = false;
+unsigned long ledAnimationStartTime = 0;
+int ledAnimationStep = 0;
+const unsigned long LED_ANIMATION_STEP_DURATION = 200; // 200ms per animation step
+const int LED_ANIMATION_CYCLES = 3; // Number of flash cycles
+bool scoreResetPending = false;
 
 void setup() {
   // Initialize serial communications
@@ -116,6 +125,12 @@ void loop() {
     lastMarbleSensorCheck = currentMillis;
   }
 
+  // Handle non-blocking LED animation if active
+  if (ledAnimationActive && currentMillis - lastLedAnimationUpdate >= LED_ANIMATION_STEP_DURATION) {
+    updateLedAnimation();
+    lastLedAnimationUpdate = currentMillis;
+  }
+
   // Handle timed events (motor and marble ejector)
   handleTimedEvents(currentMillis);
 }
@@ -131,6 +146,12 @@ void checkScoreSensor() {
     Serial.print("Score sensor value: ");
     Serial.println(sensorValue);
     lastDebugTime = millis();
+  }
+
+  // Skip sensor processing if LED animation is active
+  if (ledAnimationActive) {
+    prevScoreSensorState = currentState;
+    return;
   }
 
   // Detect rising edge (sensor just activated)
@@ -151,36 +172,21 @@ void checkScoreSensor() {
       // Check if we've reached 5 or 10 detections
       if (scoreCount == 5) {
         // Play song 001.wav from folder 01 at the first 5 detections
-        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[0]);  // Fixed: using array index
+        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[0]);
         Serial.println("Playing score song 1 (001.wav)");
-        delay(50);  // Wait between commands
         
-        // Optional: Flash all LEDs to indicate completion of round 1
-        for (int j = 0; j < 3; j++) {
-          for (int k = 0; k < 5; k++) {
-            digitalWrite(SCORE_LEDS[k], LOW);
-          }
-          delay(200);
-          for (int k = 0; k < 5; k++) {
-            digitalWrite(SCORE_LEDS[k], HIGH);
-          }
-          delay(200);
-        }
-        // Reset display to show current score
-        updateScoreLEDs();
+        // Start LED animation instead of using delay
+        startLedAnimation();
       } else if (scoreCount == 10) {
         // Play song 002.wav from folder 01 at the second 5 detections
-        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[1]);  // Fixed: using array index
+        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[1]);
         Serial.println("Playing score song 2 (002.wav)");
-        delay(50);  // Wait between commands
-
-        // Reset score count
-        scoreCount = 0;
-
-        // Turn off all LEDs
-        for (int j = 0; j < 5; j++) {
-          digitalWrite(SCORE_LEDS[j], LOW);
-        }
+        
+        // Flag that score should be reset after animation
+        scoreResetPending = true;
+        
+        // Start LED animation
+        startLedAnimation();
       }
     }
   }
@@ -191,7 +197,9 @@ void checkScoreSensor() {
 
 void updateScoreLEDs() {
   // Calculate how many LEDs should be on based on score count
-  int ledsOn = min(scoreCount, 5);
+  // Always show current score within the range of 0-5 LEDs
+  int ledsOn = scoreCount > 5 ? scoreCount - 5 : scoreCount;
+  ledsOn = min(ledsOn, 5); // Ensure we don't exceed 5 LEDs
 
   // Update LED states
   for (int i = 0; i < 5; i++) {
@@ -200,6 +208,50 @@ void updateScoreLEDs() {
     } else {
       digitalWrite(SCORE_LEDS[i], LOW);
     }
+  }
+}
+
+void startLedAnimation() {
+  ledAnimationActive = true;
+  ledAnimationStartTime = millis();
+  ledAnimationStep = 0;
+  
+  // Turn off all LEDs to start animation
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(SCORE_LEDS[i], LOW);
+  }
+  
+  Serial.println("LED animation started");
+}
+
+void updateLedAnimation() {
+  // Calculate which animation cycle we're in
+  int totalSteps = LED_ANIMATION_CYCLES * 2; // On/Off for each cycle
+  int currentStep = ledAnimationStep % totalSteps;
+  bool ledsOn = (currentStep % 2 == 0); // Even steps turn LEDs on, odd steps turn them off
+  
+  // Update all LEDs based on animation step
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(SCORE_LEDS[i], ledsOn ? HIGH : LOW);
+  }
+  
+  // Move to next animation step
+  ledAnimationStep++;
+  
+  // Check if animation is complete
+  if (ledAnimationStep >= totalSteps) {
+    ledAnimationActive = false;
+    
+    // Check if we need to reset score
+    if (scoreResetPending) {
+      scoreCount = 0;
+      scoreResetPending = false;
+      Serial.println("Score reset after animation");
+    }
+    
+    // Update LED display to show current score
+    updateScoreLEDs();
+    Serial.println("LED animation completed");
   }
 }
 
@@ -219,7 +271,7 @@ void checkSongSensors() {
       Serial.print(UNIQUE_SONGS[i]);
       Serial.println(".wav");
 
-      delay(50);  // Wait between commands
+      delay(50);  // Short delay for MP3 command is acceptable
     }
 
     // Update previous state
