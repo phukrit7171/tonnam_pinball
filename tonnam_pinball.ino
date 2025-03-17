@@ -31,7 +31,7 @@ const int SCORE_SONG[2] = { 0x01, 0x02 };                // score songs (001.wav
 const int UNIQUE_SONGS[4] = { 0x03, 0x04, 0x05, 0x06 };  // Songs 003.wav to 006.wav
 
 // Volume level (0-30)
-const int VOLUME_LEVEL = 0x17;  // Volume level 22
+const int VOLUME_LEVEL = 0x17;  // Volume level 23
 
 // Timing variables for non-blocking operation
 unsigned long lastScoreSensorCheck = 0;
