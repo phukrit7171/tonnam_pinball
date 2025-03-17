@@ -19,7 +19,7 @@ const int MARBLE_EJECTOR_PIN = 9;  // Marble ejector control pin
 MP3 mp3(MP3_RX, MP3_TX);
 
 // Thresholds and variables
-const int SCORE_SENSOR_THRESHOLD = 300;    // Lower threshold for parallel score sensors
+const int SCORE_SENSOR_THRESHOLD = 110;    // Lower threshold for parallel score sensors
 const int SONG_SENSOR_THRESHOLD = 500;     // Threshold for individual song sensors
 const int MOTOR_SENSOR_THRESHOLD = 500;    // Threshold for motor sensor
 const int DETECTION_DEBOUNCE = 1000;       // Debounce time in milliseconds
@@ -154,6 +154,20 @@ void checkScoreSensor() {
         mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[0]);  // Fixed: using array index
         Serial.println("Playing score song 1 (001.wav)");
         delay(50);  // Wait between commands
+        
+        // Optional: Flash all LEDs to indicate completion of round 1
+        for (int j = 0; j < 3; j++) {
+          for (int k = 0; k < 5; k++) {
+            digitalWrite(SCORE_LEDS[k], LOW);
+          }
+          delay(200);
+          for (int k = 0; k < 5; k++) {
+            digitalWrite(SCORE_LEDS[k], HIGH);
+          }
+          delay(200);
+        }
+        // Reset display to show current score
+        updateScoreLEDs();
       } else if (scoreCount == 10) {
         // Play song 002.wav from folder 01 at the second 5 detections
         mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[1]);  // Fixed: using array index
