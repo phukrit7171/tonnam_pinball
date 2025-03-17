@@ -4,9 +4,9 @@
 // Pin definitions
 const int SCORE_SENSOR = A0;                    // Single analog pin for all scoring sensors (parallel circuit)
 const int SCORE_LEDS[] = { 2, 3, 4, 5, 6 };     // 5 LEDs for score indication
-const int SONG_SENSORS[] = { A0, A1, A2, A3 };  // 4 sensors for different songs
-const int MOTOR_LIGHT_SENSOR = A4;              // Sensor for motor and lights
-const int MARBLE_SENSOR = A5;                   // Sensor for marble ejection
+const int SONG_SENSORS[] = { A1, A2, A3, A4 };  // 4 sensors for different songs
+const int MOTOR_LIGHT_SENSOR = A5;              // Sensor for motor and lights
+const int MARBLE_SENSOR = 12;                   // Changed to digital pin 12 to avoid conflict with A5
 
 // Output pins
 const int MOTOR_PIN = 7;           // Motor control pin
@@ -26,10 +26,9 @@ unsigned long lastScoreTime = 0;      // Time of last score detection
 
 // Song file numbers - RedMP3 requires folder and file structure
 // Assuming songs are in folder 01 with file names 001.wav, 002.wav, etc.
-const int FOLDER_NUMBER = 0x01;                         // Folder "01"
-const int SCORE_SONG_1 = 0x01;                          // First score threshold song (001.wav)
-const int SCORE_SONG_2 = 0x02;                          // Second score threshold song (002.wav)
-const int UNIQUE_SONGS[] = { 0x03, 0x04, 0x05, 0x06 };  // Songs 003.wav to 006.wav
+const int FOLDER_NUMBER = 0x01;                          // Folder "01"
+const int SCORE_SONG[2] = { 0x01, 0x02 };                // score songs (001.wav, 002.wav)
+const int UNIQUE_SONGS[4] = { 0x03, 0x04, 0x05, 0x06 };  // Songs 003.wav to 006.wav
 
 // Volume level (0-30)
 const int VOLUME_LEVEL = 0x14;  // Volume level 20
@@ -62,7 +61,7 @@ void setup() {
   delay(500);  // Required 500ms delay for MP3 module initialization
   mp3.setVolume(VOLUME_LEVEL);
   delay(50);  // Wait between commands
-  mp3.stopPlay(); 
+  mp3.stopPlay();
   delay(50);  // Wait between commands
 
   // Initialize LED pins as outputs
@@ -75,6 +74,9 @@ void setup() {
   pinMode(MOTOR_PIN, OUTPUT);
   pinMode(LIGHTS_PIN, OUTPUT);
   pinMode(MARBLE_EJECTOR_PIN, OUTPUT);
+
+  // Initialize marble sensor pin as input
+  pinMode(MARBLE_SENSOR, INPUT);
 
   // Turn off all outputs initially
   digitalWrite(MOTOR_PIN, LOW);
@@ -137,12 +139,12 @@ void checkScoreSensor() {
       // Check if we've reached 5 or 10 detections
       if (scoreCount == 5) {
         // Play song 001.wav from folder 01 at the first 5 detections
-        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG_1);
+        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[0]);  // Fixed: using array index
         Serial.println("Playing score song 1 (001.wav)");
         delay(50);  // Wait between commands
       } else if (scoreCount == 10) {
         // Play song 002.wav from folder 01 at the second 5 detections
-        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG_2);
+        mp3.playWithFileName(FOLDER_NUMBER, SCORE_SONG[1]);  // Fixed: using array index
         Serial.println("Playing score song 2 (002.wav)");
         delay(50);  // Wait between commands
 
@@ -218,7 +220,8 @@ void checkMotorLightsSensor() {
 }
 
 void checkMarbleEjectorSensor() {
-  bool currentState = analogRead(MARBLE_SENSOR) > SENSOR_THRESHOLD;
+  // Changed to digitalRead since we moved to a digital pin
+  bool currentState = digitalRead(MARBLE_SENSOR) == HIGH;
 
   // Detect rising edge (sensor just activated)
   if (currentState && !prevMarbleSensorState && !marbleEjectorActive) {
