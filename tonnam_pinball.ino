@@ -19,7 +19,7 @@ const int MARBLE_EJECTOR_PIN = 9;  // Marble ejector control pin
 MP3 mp3(MP3_RX, MP3_TX);
 
 // Thresholds and variables
-const int SCORE_SENSOR_THRESHOLD = 67;   // Lower threshold for parallel score sensors
+const int SCORE_SENSOR_THRESHOLD = 110;   // Lower threshold for parallel score sensors
 const int SONG_SENSOR_THRESHOLD = 500;   // Threshold for individual song sensors
 const int MOTOR_SENSOR_THRESHOLD = 500;  // Threshold for motor sensor
 const int DETECTION_DEBOUNCE = 1000;     // Debounce time in milliseconds
